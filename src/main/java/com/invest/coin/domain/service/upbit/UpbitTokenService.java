@@ -4,6 +4,7 @@ import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -28,7 +29,7 @@ public class UpbitTokenService {
 		String token =
 				JWT.create()
 				.withClaim("access_key", accessKey)
-				.withClaim("nonce", UUID.randomUUID().toString())
+				.withClaim("nonce", String.valueOf(Instant.now().toEpochMilli()))
 				.sign(Algorithm.HMAC256(secretKey));
 		return String.format("Bearer %s", token);
 	}
@@ -47,7 +48,7 @@ public class UpbitTokenService {
 		String token =
 				JWT.create()
 				.withClaim("access_key", accessKey)
-				.withClaim("nonce", UUID.randomUUID().toString())
+				.withClaim("nonce", String.valueOf(Instant.now().toEpochMilli()))
 				.withClaim("query_hash", queryHash)
 				.withClaim("query_hash_alg", "SHA512")
 				.sign(Algorithm.HMAC256(secretKey));

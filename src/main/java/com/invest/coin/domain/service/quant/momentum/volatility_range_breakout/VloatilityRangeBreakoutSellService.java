@@ -2,9 +2,15 @@ package com.invest.coin.domain.service.quant.momentum.volatility_range_breakout;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.annotation.PostConstruct;
 
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -25,20 +31,50 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class VloatilityRangeBreakoutSellService {
 	
+	private Map<String, AtomicBoolean> checking = new HashMap<>();
+	private Map<String, LocalDateTime> checkingSetTime = new HashMap<>();
+	
 	private final UpbitTradeService upbitTradeService;
 	private final VloatilityRangeBreakoutRepository vloatilityRangeBreakoutRepository;
+	
+	@PostConstruct
+    public void init() {
+        for(CoinType coinType : CoinType.values()) {
+        	checking.put(coinType.getUpbitTicker(), new AtomicBoolean());
+        	checkingSetTime.put(coinType.getUpbitTicker(), LocalDateTime.now());
+		}
+    }
+	
+	public void setChecking(boolean value) {
+		for(CoinType coinType : CoinType.values()) {
+			if (value) {
+				checkingSetTime.put(coinType.getUpbitTicker(), LocalDateTime.now());
+			}
+			checking.get(coinType.getUpbitTicker()).set(value);
+		}
+	}
 	
 	@Async
 	public void sell(CoinType coinType) {
 		log.debug("coinType : {} , sell", coinType.name());
+		if (checking.get(coinType.getUpbitTicker()).get()) {
+			if (LocalDateTime.now().isBefore(checkingSetTime.get(coinType.getUpbitTicker()).plusMinutes(5))) {
+				return;
+			}
+		}
+		checking.get(coinType.getUpbitTicker()).set(true);
+		checkingSetTime.put(coinType.getUpbitTicker(), LocalDateTime.now());
+		
 		ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
 		List<VloatilityRangeBreakout> vloatilityRangeBreakouts = vloatilityRangeBreakoutRepository.findByCoinTypeAndDateStringAndDatetimeId(coinType.name(), DateUtil.getDateString(now.minusDays(1)), String.valueOf(now.getHour()));
 		if (null == vloatilityRangeBreakouts) {
+			checking.get(coinType.getUpbitTicker()).set(false);
 			return;
 		}
 		vloatilityRangeBreakouts.stream().forEach(
 				vloatilityRangeBreakout -> {
 					if (vloatilityRangeBreakout.getStatus().equals(VloatilityRangeBreakoutStatus.NOT_BREAKOUT.getCode())) {
+						checking.get(coinType.getUpbitTicker()).set(false);
 						return;
 					}
 					
@@ -46,6 +82,7 @@ public class VloatilityRangeBreakoutSellService {
 						vloatilityRangeBreakout.setUpdatedAt(ZonedDateTime.now(ZoneId.of("Asia/Seoul")));
 						vloatilityRangeBreakout.setStatus(VloatilityRangeBreakoutStatus.NOT_BREAKOUT.getCode());
 						vloatilityRangeBreakoutRepository.save(vloatilityRangeBreakout);
+						checking.get(coinType.getUpbitTicker()).set(false);
 						return;
 					}
 					
@@ -54,12 +91,24 @@ public class VloatilityRangeBreakoutSellService {
 					}
 				}
 			);
+		
+		checking.get(coinType.getUpbitTicker()).set(false);
 	}
 	
 	// 못 팔고 남아있는 매수 주문 있는지 확인
 	public void sellRemainOrder(CoinType coinType) {
+		log.debug("coinType : {} , sellRemainOrder", coinType.name());
+		if (checking.get(coinType.getUpbitTicker()).get()) {
+			if (LocalDateTime.now().isBefore(checkingSetTime.get(coinType.getUpbitTicker()).plusMinutes(5))) {
+				return;
+			}
+		}
+		checking.get(coinType.getUpbitTicker()).set(true);
+		checkingSetTime.put(coinType.getUpbitTicker(), LocalDateTime.now());
+		
 		List<VloatilityRangeBreakout> remainVloatilityRangeBreakouts = vloatilityRangeBreakoutRepository.findByCoinTypeAndStatus(coinType.name(), VloatilityRangeBreakoutStatus.BUY_DONE.getCode());
 		if (null == remainVloatilityRangeBreakouts) {
+			checking.get(coinType.getUpbitTicker()).set(false);
 			return;
 		}
 		
@@ -76,6 +125,8 @@ public class VloatilityRangeBreakoutSellService {
 						sellOrder(coinType, vloatilityRangeBreakout);
 					}
 				});
+		
+		checking.get(coinType.getUpbitTicker()).set(false);
 	}
 	
 	public void sellOrder(CoinType coinType, VloatilityRangeBreakout vloatilityRangeBreakout) {
@@ -129,8 +180,8 @@ public class VloatilityRangeBreakoutSellService {
 					vloatilityRangeBreakout.setUpdatedAt(ZonedDateTime.now(ZoneId.of("Asia/Seoul")));
 					vloatilityRangeBreakout.setStatus(VloatilityRangeBreakoutStatus.SELL_DONE.getCode());
 					vloatilityRangeBreakoutRepository.save(vloatilityRangeBreakout);
-					
 				});
+		
 	}
 
 }

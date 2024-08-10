@@ -52,7 +52,7 @@ public class CheckScheduler {
 		}
 	}
 	
-	// 손절 여부 확인 ( 5초에 한번 실행 , 구매가격 기준 5% 이상 손실시 손절 )
+	// 손절 여부 확인 ( 5초에 한번 실행 , 구매가격 기준 2% 이상 손실시 손절 )
 	@Scheduled(fixedDelay = 1000 * 5) 
 	public void checkStopLossAndSellOrder() {
 		try {
@@ -77,17 +77,27 @@ public class CheckScheduler {
 	// 매도 (매 정시 1시간마다)
 	@Scheduled(cron = "0 0 * * * *") 
 	public void sell() {
-		for(CoinType coinType : CoinType.values()) {
-			vloatilityRangeBreakoutSellService.sell(coinType);
+		try {
+			for(CoinType coinType : CoinType.values()) {
+				vloatilityRangeBreakoutSellService.sell(coinType);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+			vloatilityRangeBreakoutSellService.setChecking(false);
 		}
 	}
 	
 	// 못 팔고 남아있는 매수 주문 있는지 확인
 	@Scheduled(fixedDelay = 1000 * 60) 
 		public void sellRemain() {
+		try {
 			for(CoinType coinType : CoinType.values()) {
 				vloatilityRangeBreakoutSellService.sellRemainOrder(coinType);
 			}
+		} catch (Exception e) {
+			e.printStackTrace();
+			vloatilityRangeBreakoutSellService.setChecking(false);
 		}
+	}
 
 }
